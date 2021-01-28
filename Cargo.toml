@@ -1,0 +1,16 @@
+[package]
+name = "aci"
+version = "0.1.0"
+authors = ["Ondřej Hošek <ondra.hosek@gmail.com>"]
+description = "Cisco ACI client library for the APIC REST API"
+license = "MIT/Apache-2.0"
+edition = "2018"
+
+[dependencies]
+async-trait = { version = "0.1" }
+bitflags = { version = "1.2" }
+hyper = { version = "0.14", features = ["http1", "http2", "client"] }
+hyper-tls = { version = "0.5" }
+json = { version = "0.12" }
+log = { version = "0.4" }
+url = { version = "2.2" }
