@@ -69,7 +69,7 @@ pub async fn perform_json_request<C>(
 
 /// Converts a JSON value returned by the APIC into a vector of ACI objects.
 ///
-/// This JSON value is an object with an `"imdata"` key containing a list of single ACI objects.
+/// This JSON value is an object with an `imdata` key containing a list of single ACI objects.
 pub fn json_to_aci_objects(body: JsonValue) -> Result<Vec<AciObject>, AciObjectError> {
     let mut ret = Vec::new();
 
@@ -78,7 +78,7 @@ pub fn json_to_aci_objects(body: JsonValue) -> Result<Vec<AciObject>, AciObjectE
         return Err(AciObjectError::NoImdata);
     }
     for entry in imdata.members() {
-        let aci_obj = entry.try_into()?;
+        let aci_obj = AciObject::from_json(entry)?;
         ret.push(aci_obj);
     }
 
@@ -538,7 +538,7 @@ impl<A, AE> ApicConnection<A, AE>
             query_uri,
             "POST",
             &headers,
-            Some(obj.into()),
+            Some(obj.to_json()),
         ).await?;
         let aci_objects = json_to_aci_objects(json_value)
             .map_err(|aoe| ApicCommError::InvalidAciObject(aoe))?;

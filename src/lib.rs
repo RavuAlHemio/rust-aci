@@ -4,7 +4,6 @@ pub mod error;
 pub mod path;
 
 use std::collections::HashMap;
-use std::convert::{TryFrom, TryInto};
 use std::error::Error;
 use std::fmt;
 
@@ -119,11 +118,29 @@ impl AciObject {
     pub fn children_mut(&mut self) -> &mut Vec<AciObject> {
         &mut self.children
     }
-}
-impl TryFrom<&JsonValue> for AciObject {
-    type Error = AciObjectError;
 
-    fn try_from(value: &JsonValue) -> Result<Self, Self::Error> {
+    /// Attempts to convert a JSON representation of an ACI object into a AciObject.
+    ///
+    /// A JSON representation of an ACI object is a JSON object with one entry whose key is the
+    /// class name of the object and whose value is a JSON object with one or two entries:
+    /// `attributes`, which is a JSON object storing the object's attribute names and values (as
+    /// strings); and, optionally, `children`, which is a JSON array containing the object's
+    /// children (which are also JSON representations of ACI objects).
+    ///
+    /// An example of a (childless) representation of a JSON object:
+    ///
+    /// ```json
+    /// {
+    ///   "polUni": {
+    ///     "attributes": {
+    ///       "annotation": "",
+    ///       "dn": "uni",
+    ///       "nameAlias": ""
+    ///     }
+    ///   }
+    /// }
+    /// ```
+    pub fn from_json(value: &JsonValue) -> Result<AciObject, AciObjectError> {
         if !value.is_object() {
             return Err(AciObjectError::JsonNotObject);
         }
@@ -147,7 +164,7 @@ impl TryFrom<&JsonValue> for AciObject {
             let mut children = Vec::new();
             let json_children = &keys_values["children"];
             for json_child in json_children.members() {
-                let child = json_child.try_into()?;
+                let child = AciObject::from_json(json_child)?;
                 children.push(child);
             }
 
@@ -159,17 +176,19 @@ impl TryFrom<&JsonValue> for AciObject {
         }
         panic!("fell out of loop");
     }
-}
-impl From<&AciObject> for JsonValue {
-    fn from(o: &AciObject) -> Self {
+
+    /// Convert this AciObject into its JSON representation.
+    ///
+    /// For a description of the JSON representation of an AciObject, see `AciObject::from_json`.
+    pub fn to_json(&self) -> JsonValue {
         let mut attributes_value = JsonValue::new_object();
-        for (k, v) in o.attributes() {
+        for (k, v) in self.attributes() {
             attributes_value[k] = JsonValue::String(v.clone());
         }
 
         let mut children_value = JsonValue::new_array();
-        for child in o.children() {
-            let json_child: JsonValue = child.into();
+        for child in self.children() {
+            let json_child: JsonValue = child.to_json();
             children_value.push(json_child)
                 .expect("failed to push to children");
         }
@@ -182,7 +201,7 @@ impl From<&AciObject> for JsonValue {
         }
 
         let mut top_object = JsonValue::new_object();
-        top_object[o.class_name.clone()] = props;
+        top_object[self.class_name.clone()] = props;
         top_object
     }
 }
