@@ -13,6 +13,7 @@ use crate::error::ApicCommError;
 
 
 /// Data returned from the APIC authenticator to the APIC connection.
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub struct ApicAuthenticatorData {
     apic_cookie: String,
     apic_challenge: Option<String>,
@@ -106,6 +107,7 @@ impl Error for ApicUsernamePasswordError {
 
 /// An authenticator that logs into the Application Policy Infrastructure Controller (APIC) using
 /// a username and a password.
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub struct ApicUsernamePasswordAuth {
     username: String,
     password: String,

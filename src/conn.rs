@@ -98,7 +98,7 @@ trait RestQueryParam {
 
 /// Defines the scope of a query, i.e. which part of the object tree to search relative to the base
 /// Distinguished Name (DN) specified.
-#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub enum QueryTarget {
     /// Consider the object with the specified DN.
     ConsiderSelf,
@@ -126,7 +126,7 @@ impl RestQueryParam for QueryTarget {
 
 /// Defines the scope of a query's return value, i.e. which part of the object tree to return for
 /// each object that has been found.
-#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub enum ResponseSubtree {
     /// Return only the found object.
     ReturnSelf,
@@ -243,7 +243,7 @@ impl RestQueryParam for ResponseSubtreeInclude {
 
 
 /// Defines which properties to include in the response.
-#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub enum ResponsePropertyInclude {
     /// Return all properties of each managed object.
     All,
@@ -270,7 +270,7 @@ impl RestQueryParam for ResponsePropertyInclude {
 
 
 /// Allows query settings to be set before a query is performed.
-#[derive(Debug, Clone, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct QuerySettings {
     query_target: QueryTarget,
     query_target_filter: Option<String>,
@@ -377,6 +377,7 @@ impl QuerySettings {
 
 
 /// A connection to an Application Policy Infrastructure Controller (APIC).
+#[derive(Debug)]
 pub struct ApicConnection<A, AE>
         where A: ApicAuthenticator<AE>, AE: Error {
     base_uri: Url,

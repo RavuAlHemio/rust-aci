@@ -13,7 +13,7 @@ use json::{self, JsonValue};
 const DN_KEY: &str = "dn";
 
 /// Represents an error encountered when constructing an ACI object.
-#[derive(Debug)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub enum AciObjectError {
     /// The "dn" attribute, storing the distinguished name, is missing from the attribute HashMap.
     MissingDistinguishedName,

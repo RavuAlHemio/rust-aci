@@ -2,7 +2,7 @@ use std::error::Error;
 use std::fmt;
 
 /// An error returned if splitting a Distinguished Name (DN) has been unsuccessful.
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
 pub enum SplitDnError {
     /// At the end of the DN, at least one square bracket remained open.
     UnclosedSquareBrackets(usize),
