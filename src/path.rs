@@ -3,19 +3,19 @@ use std::fmt;
 
 /// An error returned if splitting a Distinguished Name (DN) has been unsuccessful.
 #[derive(Debug, PartialEq, Eq)]
-pub enum SplitDNError {
+pub enum SplitDnError {
     /// At the end of the DN, at least one square bracket remained open.
     UnclosedSquareBrackets(usize),
 
     /// In the DN, more square brackets were closed than were previously open.
     OverclosedSquareBracket(usize),
 }
-impl fmt::Display for SplitDNError {
+impl fmt::Display for SplitDnError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match &self {
-            SplitDNError::UnclosedSquareBrackets(num) =>
+            SplitDnError::UnclosedSquareBrackets(num) =>
                 write!(f, "{} square brackets remained unclosed", num),
-            SplitDNError::OverclosedSquareBracket(byte_pos) =>
+            SplitDnError::OverclosedSquareBracket(byte_pos) =>
                 write!(
                     f,
                     "more square brackets closed than previously opened at byte position {}",
@@ -24,13 +24,13 @@ impl fmt::Display for SplitDNError {
         }
     }
 }
-impl Error for SplitDNError {
+impl Error for SplitDnError {
 }
 
 /// Splits a Distinguished Name (DN) into its component Relative Distinguished Names (RDNs). ACI
 /// DNs consist of RDNs joined by forward slash characters, which can be escaped by placing them
 /// into square brackets. Square brackets can be nested.
-pub fn split_dn(dn: &str) -> Result<Vec<&str>, SplitDNError> {
+pub fn split_dn(dn: &str) -> Result<Vec<&str>, SplitDnError> {
     let mut start_index = 0usize;
     let mut bracket_depth = 0usize;
     let mut slices: Vec<&str> = Vec::new();
@@ -42,7 +42,7 @@ pub fn split_dn(dn: &str) -> Result<Vec<&str>, SplitDNError> {
             bracket_depth += 1;
         } else if bs[i] == (']' as u8) {
             if bracket_depth == 0 {
-                return Err(SplitDNError::OverclosedSquareBracket(i));
+                return Err(SplitDnError::OverclosedSquareBracket(i));
             }
             bracket_depth -= 1;
         } else if bs[i] == ('/' as u8) && bracket_depth == 0 {
@@ -56,7 +56,7 @@ pub fn split_dn(dn: &str) -> Result<Vec<&str>, SplitDNError> {
     slices.push(&dn[start_index..]);
 
     if bracket_depth > 0 {
-        Err(SplitDNError::UnclosedSquareBrackets(bracket_depth))
+        Err(SplitDnError::UnclosedSquareBrackets(bracket_depth))
     } else {
         Ok(slices)
     }
@@ -229,7 +229,7 @@ mod test {
         ).unwrap_err();
         assert_eq!(
             err,
-            SplitDNError::OverclosedSquareBracket(
+            SplitDnError::OverclosedSquareBracket(
                 "uni/fabric/nodecfgcont/node-1001/rsnodeGroup-[uni/fabric/maintgrp-MAINT_GRP_SAMPLE]]".len()-1
             )
         );
@@ -240,7 +240,7 @@ mod test {
         let err = split_dn(
             "uni/fabric/nodecfgcont/node-1001/rsnodeGroup-[uni/fabric/maintgrp-MAINT_GRP_SAMPLE]/fault-[F1300"
         ).unwrap_err();
-        assert_eq!(err, SplitDNError::UnclosedSquareBrackets(1));
+        assert_eq!(err, SplitDnError::UnclosedSquareBrackets(1));
     }
 
     #[test]
@@ -248,6 +248,6 @@ mod test {
         let err = split_dn(
             "uni/fabric/nodecfgcont/node-1001/rsnodeGroup-[uni/fabric/maintgrp-MAINT_GRP_SAMPLE/fault-[F1300"
         ).unwrap_err();
-        assert_eq!(err, SplitDNError::UnclosedSquareBrackets(2));
+        assert_eq!(err, SplitDnError::UnclosedSquareBrackets(2));
     }
 }

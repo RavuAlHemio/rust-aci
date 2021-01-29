@@ -60,9 +60,9 @@ pub async fn perform_json_request<C>(
         .await
         .map_err(|e| ApicCommError::ErrorObtainingResponse(e))?;
     let response_str = std::str::from_utf8(&response_bytes)
-        .map_err(|e| ApicCommError::InvalidUTF8(e))?;
+        .map_err(|e| ApicCommError::InvalidUtf8(e))?;
     let response_json = json::parse(response_str)
-        .map_err(|e| ApicCommError::InvalidJSON(e))?;
+        .map_err(|e| ApicCommError::InvalidJson(e))?;
 
     Ok(response_json)
 }
@@ -467,7 +467,7 @@ impl<A, AE> ApicConnection<A, AE>
             None,
         ).await?;
         let aci_objects = json_to_aci_objects(json_value)
-            .map_err(|aoe| ApicCommError::InvalidACIObject(aoe))?;
+            .map_err(|aoe| ApicCommError::InvalidAciObject(aoe))?;
         Ok(aci_objects)
     }
 
@@ -508,7 +508,7 @@ impl<A, AE> ApicConnection<A, AE>
             None,
         ).await?;
         let aci_objects = json_to_aci_objects(json_value)
-            .map_err(|aoe| ApicCommError::InvalidACIObject(aoe))?;
+            .map_err(|aoe| ApicCommError::InvalidAciObject(aoe))?;
         Ok(aci_objects)
     }
 
@@ -540,7 +540,7 @@ impl<A, AE> ApicConnection<A, AE>
             Some(obj.into()),
         ).await?;
         let aci_objects = json_to_aci_objects(json_value)
-            .map_err(|aoe| ApicCommError::InvalidACIObject(aoe))?;
+            .map_err(|aoe| ApicCommError::InvalidAciObject(aoe))?;
         Ok(aci_objects)
     }
 

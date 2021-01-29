@@ -21,13 +21,13 @@ pub enum ApicCommError {
     ErrorResponse(hyper::Response<hyper::Body>),
 
     /// The APIC response is not valid UTF-8.
-    InvalidUTF8(Utf8Error),
+    InvalidUtf8(Utf8Error),
 
     /// The APIC response is not valid JSON.
-    InvalidJSON(json::Error),
+    InvalidJson(json::Error),
 
     /// An invalid ACI object has been returned.
-    InvalidACIObject(AciObjectError),
+    InvalidAciObject(AciObjectError),
 }
 impl fmt::Display for ApicCommError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -40,11 +40,11 @@ impl fmt::Display for ApicCommError {
                 => write!(f, "error obtaining response: {}", e),
             ApicCommError::ErrorResponse(_e)
                 => write!(f, "server returned negative response"),
-            ApicCommError::InvalidUTF8(e)
+            ApicCommError::InvalidUtf8(e)
                 => write!(f, "server returned response that was not valid UTF-8: {}", e),
-            ApicCommError::InvalidJSON(e)
+            ApicCommError::InvalidJson(e)
                 => write!(f, "server returned response that was not valid JSON: {}", e),
-            ApicCommError::InvalidACIObject(e)
+            ApicCommError::InvalidAciObject(e)
                 => write!(f, "server returned an invalid ACI object: {}", e),
         }
     }
