@@ -11,6 +11,12 @@ pub enum ApicCommError {
     /// Constructing the login URI failed.
     InvalidUri(url::ParseError),
 
+    /// The APIC has rejected the credentials.
+    InvalidCredentials,
+
+    /// The expected token value was missing from the APIC response during authentication.
+    MissingSessionToken(json::JsonValue),
+
     /// An error occurred while assembling the HTTP request.
     ErrorAssemblingRequest(hyper::http::Error),
 
@@ -34,6 +40,10 @@ impl fmt::Display for ApicCommError {
         match &self {
             ApicCommError::InvalidUri(u)
                 => write!(f, "invalid URI: {}", u),
+            ApicCommError::InvalidCredentials
+                => write!(f, "invalid credentials"),
+            ApicCommError::MissingSessionToken(v)
+                => write!(f, "missing session token in response {}", v),
             ApicCommError::ErrorAssemblingRequest(e)
                 => write!(f, "error assembling request: {}", e),
             ApicCommError::ErrorObtainingResponse(e)

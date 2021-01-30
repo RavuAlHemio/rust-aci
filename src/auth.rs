@@ -1,11 +1,11 @@
 use std::collections::HashMap;
-use std::error::Error;
-use std::fmt;
+use std::time::Duration;
 
 use async_trait::async_trait;
 use hyper::{Body, StatusCode};
 use hyper::client::Client;
-use json::{self, JsonValue};
+use json;
+use log::debug;
 use url::Url;
 
 use crate::conn;
@@ -17,16 +17,19 @@ use crate::error::ApicCommError;
 pub struct ApicAuthenticatorData {
     apic_cookie: String,
     apic_challenge: Option<String>,
+    refresh_timeout: Duration,
 }
 impl ApicAuthenticatorData {
     /// Creates a new instance of ApicAuthenticatorData.
     pub fn new(
         apic_cookie: String,
         apic_challenge: Option<String>,
+        refresh_timeout: Duration,
     ) -> ApicAuthenticatorData {
         ApicAuthenticatorData {
             apic_cookie,
             apic_challenge,
+            refresh_timeout,
         }
     }
 
@@ -41,6 +44,11 @@ impl ApicAuthenticatorData {
         self.apic_challenge.as_deref()
     }
 
+    /// Returns the duration after which the login session to the APIC must be refreshed.
+    pub fn refresh_timeout(&self) -> Duration {
+        self.refresh_timeout
+    }
+
     /// Returns the authenticator data as headers than can be sent to the HTTP server.
     pub fn as_headers(&self) -> HashMap<String, String> {
         let mut headers = HashMap::new();
@@ -51,15 +59,24 @@ impl ApicAuthenticatorData {
         headers
     }
 }
+impl Default for ApicAuthenticatorData {
+    fn default() -> Self {
+        Self {
+            apic_cookie: String::new(),
+            apic_challenge: None,
+            refresh_timeout: Duration::from_nanos(0),
+        }
+    }
+}
 
 /// Implementors of this trait can login to an Application Policy Infrastructure Controller (APIC).
 #[async_trait]
-pub trait ApicAuthenticator<E: Error> {
+pub trait ApicAuthenticator {
     async fn login<C>(
         &self,
         client: &Client<C, Body>,
         base_uri: &Url,
-    ) -> Result<ApicAuthenticatorData, E>
+    ) -> Result<ApicAuthenticatorData, ApicCommError>
         where
             C: 'static + Clone + hyper::client::connect::Connect + Send + Sync;
 
@@ -68,41 +85,9 @@ pub trait ApicAuthenticator<E: Error> {
         client: &Client<C, Body>,
         base_uri: &Url,
         current_data: &ApicAuthenticatorData,
-    ) -> Result<ApicAuthenticatorData, E>
+    ) -> Result<ApicAuthenticatorData, ApicCommError>
         where
             C: 'static + Clone + hyper::client::connect::Connect + Send + Sync;
-}
-
-/// An error produced by username-and-password authentication.
-#[derive(Debug)]
-pub enum ApicUsernamePasswordError {
-    /// An error that can also happen during normal communication with the APIC.
-    ApicCommError(ApicCommError),
-
-    /// The supplied credentials were incorrect.
-    InvalidCredentials,
-
-    /// The expected token value was missing from the APIC response.
-    MissingToken(JsonValue),
-}
-impl fmt::Display for ApicUsernamePasswordError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match &self {
-            ApicUsernamePasswordError::ApicCommError(e)
-                => e.fmt(f),
-            ApicUsernamePasswordError::InvalidCredentials
-                => write!(f, "invalid credentials supplied"),
-            ApicUsernamePasswordError::MissingToken(doc)
-                => write!(f, "response missing a required token: {}", doc),
-        }
-    }
-}
-impl From<ApicCommError> for ApicUsernamePasswordError {
-    fn from(e: ApicCommError) -> Self {
-        ApicUsernamePasswordError::ApicCommError(e)
-    }
-}
-impl Error for ApicUsernamePasswordError {
 }
 
 /// An authenticator that logs into the Application Policy Infrastructure Controller (APIC) using
@@ -135,12 +120,12 @@ impl ApicUsernamePasswordAuth {
     }
 }
 #[async_trait]
-impl ApicAuthenticator<ApicUsernamePasswordError> for ApicUsernamePasswordAuth {
+impl ApicAuthenticator for ApicUsernamePasswordAuth {
     async fn login<C>(
         &self,
         client: &Client<C, Body>,
         base_uri: &Url,
-    ) -> Result<ApicAuthenticatorData, ApicUsernamePasswordError>
+    ) -> Result<ApicAuthenticatorData, ApicCommError>
         where
             C: 'static + Clone + hyper::client::connect::Connect + Send + Sync {
         let uri = base_uri.join("api/aaaLogin.json?gui-token-request=yes")
@@ -166,31 +151,38 @@ impl ApicAuthenticator<ApicUsernamePasswordError> for ApicUsernamePasswordAuth {
             Ok(r) => r,
             Err(ApicCommError::ErrorResponse(resp)) => {
                 if resp.status() == StatusCode::FORBIDDEN {
-                    return Err(ApicUsernamePasswordError::InvalidCredentials);
+                    return Err(ApicCommError::InvalidCredentials);
                 } else {
-                    return Err(ApicCommError::ErrorResponse(resp).into());
+                    return Err(ApicCommError::ErrorResponse(resp));
                 }
             },
             Err(e) => {
-                return Err(e.into());
+                return Err(e);
             },
         };
 
         let attribs = &response_json["imdata"][0]["aaaLogin"]["attributes"];
+        debug!("login attributes: {}", attribs);
         if !attribs.is_object() {
-            return Err(ApicUsernamePasswordError::MissingToken(response_json));
+            return Err(ApicCommError::MissingSessionToken(response_json));
         }
         let token = match attribs["token"].as_str() {
             Some(s) => String::from(s),
-            None => return Err(ApicUsernamePasswordError::MissingToken(response_json)),
+            None => return Err(ApicCommError::MissingSessionToken(response_json)),
         };
         let url_token = attribs["urlToken"]
             .as_str()
             .map(String::from);
+        let refresh_timeout = attribs["refreshTimeoutSeconds"].as_str()
+            .map(|rts| rts.parse::<u64>().ok())
+            .flatten()
+            .map(|i| Duration::from_secs(i))
+            .unwrap_or(Duration::from_secs(600));
 
         Ok(ApicAuthenticatorData::new(
             token,
             url_token,
+            refresh_timeout,
         ))
     }
 
@@ -199,7 +191,7 @@ impl ApicAuthenticator<ApicUsernamePasswordError> for ApicUsernamePasswordAuth {
         client: &Client<C, Body>,
         base_uri: &Url,
         current_data: &ApicAuthenticatorData,
-    ) -> Result<ApicAuthenticatorData, ApicUsernamePasswordError>
+    ) -> Result<ApicAuthenticatorData, ApicCommError>
             where C: 'static + Clone + hyper::client::connect::Connect + Send + Sync {
         let uri = base_uri.join("api/aaaRefresh.json")
             .map_err(|e| ApicCommError::InvalidUri(e))?;
@@ -224,19 +216,20 @@ impl ApicAuthenticator<ApicUsernamePasswordError> for ApicUsernamePasswordAuth {
             Ok(r) => r,
             Err(ApicCommError::ErrorResponse(resp)) => {
                 if resp.status() == StatusCode::FORBIDDEN {
-                    return Err(ApicUsernamePasswordError::InvalidCredentials);
+                    return Err(ApicCommError::InvalidCredentials);
                 } else {
-                    return Err(ApicCommError::ErrorResponse(resp).into());
+                    return Err(ApicCommError::ErrorResponse(resp));
                 }
             },
             Err(e) => {
-                return Err(e.into());
+                return Err(e);
             },
         };
 
         let attribs = &response_json["imdata"][0]["aaaLogin"]["attributes"];
+        debug!("refreshed login attributes: {}", attribs);
         if !attribs.is_object() {
-            return Err(ApicUsernamePasswordError::MissingToken(response_json));
+            return Err(ApicCommError::MissingSessionToken(response_json));
         }
 
         let mut token = String::from(current_data.apic_cookie());
@@ -252,10 +245,16 @@ impl ApicAuthenticator<ApicUsernamePasswordError> for ApicUsernamePasswordAuth {
                 url_token = Some(String::from(ut));
             }
         }
+        let refresh_timeout = attribs["refreshTimeoutSeconds"].as_str()
+            .map(|rts| rts.parse::<u64>().ok())
+            .flatten()
+            .map(|i| Duration::from_secs(i))
+            .unwrap_or(Duration::from_secs(600));
 
         Ok(ApicAuthenticatorData::new(
             token,
             url_token,
+            refresh_timeout,
         ))
     }
 }

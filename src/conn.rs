@@ -1,7 +1,6 @@
 use std::collections::{HashMap, HashSet};
-use std::convert::TryInto;
-use std::error::Error;
-use std::marker::PhantomData;
+use std::sync::RwLock;
+use std::time::{Duration, Instant};
 
 use bitflags::bitflags;
 use hyper::{Body, Client, Request, StatusCode};
@@ -14,6 +13,11 @@ use url::Url;
 use crate::{AciObject, AciObjectError};
 use crate::auth::{ApicAuthenticator, ApicAuthenticatorData};
 use crate::error::ApicCommError;
+
+
+/// The maximum duration before a session times out where a refresh of the login session is
+/// recommended.
+const REFRESH_BEFORE_TIMEOUT: Duration = Duration::from_secs(60);
 
 
 /// Performs a JSON request against an APIC-like server.
@@ -378,21 +382,19 @@ impl QuerySettings {
 
 /// A connection to an Application Policy Infrastructure Controller (APIC).
 #[derive(Debug)]
-pub struct ApicConnection<A, AE>
-        where A: ApicAuthenticator<AE>, AE: Error {
+pub struct ApicConnection<A: ApicAuthenticator> {
     base_uri: Url,
     client: Client<HttpsConnector<HttpConnector>, Body>,
     authenticator: A,
-    auth_data: Option<ApicAuthenticatorData>,
-    _auth_error_type: PhantomData<AE>,
+    auth_data: ApicAuthenticatorData,
+    last_login: RwLock<Instant>,
 }
-impl<A, AE> ApicConnection<A, AE>
-        where A: ApicAuthenticator<AE>, AE: Error {
+impl<A: ApicAuthenticator> ApicConnection<A> {
     /// Creates a new APIC connection object.
     pub async fn new(
         base_uri: Url,
         authenticator: A,
-    ) -> Result<Self, AE> {
+    ) -> Result<Self, ApicCommError> {
         let https = HttpsConnector::new();
         let client = Client::builder()
             .build::<_, Body>(https);
@@ -400,35 +402,69 @@ impl<A, AE> ApicConnection<A, AE>
             base_uri,
             client,
             authenticator,
-            auth_data: None,
-            _auth_error_type: PhantomData::default(),
+            auth_data: Default::default(),
+            last_login: RwLock::new(Instant::now()),
         };
         me.login().await?;
+        assert_ne!(me.auth_data, Default::default());
         Ok(me)
     }
 
-    /// Returns whether successful authentication with the APIC was performed at least once.
-    pub fn auth_performed(&self) -> bool {
-        self.auth_data.is_some()
+    /// Returns the instant at which the last authentication was performed.
+    pub fn last_login(&self) -> Instant {
+        *self.last_login.read()
+            .expect("locking failed")
+    }
+
+    /// Returns whether the current authentication state would benefit from refreshing.
+    pub fn should_refresh_login(&self) -> bool {
+        let last_login = self.last_login.read()
+            .expect("locking failed");
+        let time_since_login = match Instant::now().checked_duration_since(*last_login) {
+            None => {
+                // last login is in the future (?!); assume we are fine
+                return false;
+            },
+            Some(tsl) => tsl,
+        };
+        let timeout = self.auth_data.refresh_timeout();
+        if timeout <= time_since_login {
+            // already timed out
+            true
+        } else if timeout - time_since_login < REFRESH_BEFORE_TIMEOUT {
+            true
+        } else {
+            false
+        }
     }
 
     /// Authenticates with the APIC, creating a new session.
-    pub async fn login(&mut self) -> Result<(), AE> {
+    pub async fn login(&mut self) -> Result<(), ApicCommError> {
+        // lock the last login info while the login is being performed
+        let mut last_login = self.last_login.write()
+            .expect("locking failed");
+
         let auth_data = self.authenticator
             .login(&self.client, &self.base_uri)
             .await?;
-        self.auth_data = Some(auth_data);
+        self.auth_data = auth_data;
+        *last_login = Instant::now();
+
         Ok(())
     }
 
     /// Refreshes the current authentication session with the APIC.
-    pub async fn refresh(&mut self) -> Result<(), AE> {
-        let current_auth_data = self.auth_data.as_ref()
-            .expect("is authenticated");
+    pub async fn refresh(&mut self) -> Result<(), ApicCommError> {
+        assert_ne!(self.auth_data, Default::default());
+        let mut last_login = self.last_login.write()
+            .expect("locking failed");
+
         let auth_data = self.authenticator
-            .refresh(&self.client, &self.base_uri, current_auth_data)
+            .refresh(&self.client, &self.base_uri, &self.auth_data)
             .await?;
-        self.auth_data = Some(auth_data);
+        self.auth_data = auth_data;
+        *last_login = Instant::now();
+
         Ok(())
     }
 
@@ -455,9 +491,7 @@ impl<A, AE> ApicConnection<A, AE>
                 .append_pair(k, v);
         }
 
-        let auth_data = self.auth_data.as_ref()
-            .expect("authenticated at least once");
-        let mut headers = auth_data.as_headers();
+        let mut headers = self.auth_data.as_headers();
         headers.insert("Accept".into(), "application/json".into());
 
         let json_value = perform_json_request(
@@ -496,9 +530,7 @@ impl<A, AE> ApicConnection<A, AE>
                 .append_pair(k, v);
         }
 
-        let auth_data = self.auth_data.as_ref()
-            .expect("authenticated at least once");
-        let mut headers = auth_data.as_headers();
+        let mut headers = self.auth_data.as_headers();
         headers.insert("Accept".into(), "application/json".into());
 
         let json_value = perform_json_request(
@@ -528,9 +560,7 @@ impl<A, AE> ApicConnection<A, AE>
             segs.push(&format!("{}.json", obj.dn()));
         }
 
-        let auth_data = self.auth_data.as_ref()
-            .expect("authenticated at least once");
-        let mut headers = auth_data.as_headers();
+        let mut headers = self.auth_data.as_headers();
         headers.insert("Accept".into(), "application/json".into());
 
         let json_value = perform_json_request(
@@ -560,9 +590,7 @@ impl<A, AE> ApicConnection<A, AE>
             segs.push(&format!("{}.json", dn));
         }
 
-        let auth_data = self.auth_data.as_ref()
-            .expect("authenticated at least once");
-        let mut headers = auth_data.as_headers();
+        let mut headers = self.auth_data.as_headers();
         headers.insert("Accept".into(), "application/json".into());
 
         perform_json_request(
