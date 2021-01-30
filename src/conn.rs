@@ -363,6 +363,7 @@ impl QuerySettings {
         self
     }
 
+    /// Convert these query settings into a HashMap of ACI query string keys and values.
     pub fn to_aci_keys_values(self) -> HashMap<String, String> {
         let mut keys_values = HashMap::new();
 
