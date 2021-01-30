@@ -62,6 +62,7 @@ pub fn split_dn(dn: &str) -> Result<Vec<&str>, SplitDnError> {
     }
 }
 
+#[cfg(test)]
 mod test {
     use super::*;
 
