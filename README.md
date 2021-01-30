@@ -14,6 +14,7 @@ async fn do_query() -> Result<(), Box<dyn std::error::Error>> {
     let apic_conn = ApicConnection::new(
         Url::parse("https://apic1.velvetfabric.example.com/").unwrap(),
         apic_auth,
+        std::time::Duration::from_secs(10),
     ).await?;
 
     let insts = apic_conn.get_instances(

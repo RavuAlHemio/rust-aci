@@ -76,6 +76,7 @@ pub trait ApicAuthenticator {
         &self,
         client: &Client<C, Body>,
         base_uri: &Url,
+        timeout: Duration,
     ) -> Result<ApicAuthenticatorData, ApicCommError>
         where
             C: 'static + Clone + hyper::client::connect::Connect + Send + Sync;
@@ -84,6 +85,7 @@ pub trait ApicAuthenticator {
         &self,
         client: &Client<C, Body>,
         base_uri: &Url,
+        timeout: Duration,
         current_data: &ApicAuthenticatorData,
     ) -> Result<ApicAuthenticatorData, ApicCommError>
         where
@@ -125,6 +127,7 @@ impl ApicAuthenticator for ApicUsernamePasswordAuth {
         &self,
         client: &Client<C, Body>,
         base_uri: &Url,
+        timeout: Duration,
     ) -> Result<ApicAuthenticatorData, ApicCommError>
         where
             C: 'static + Clone + hyper::client::connect::Connect + Send + Sync {
@@ -146,6 +149,7 @@ impl ApicAuthenticator for ApicUsernamePasswordAuth {
             "POST",
             &HashMap::new(),
             Some(req_body),
+            timeout,
         ).await;
         let response_json = match response_json_res {
             Ok(r) => r,
@@ -190,6 +194,7 @@ impl ApicAuthenticator for ApicUsernamePasswordAuth {
         &self,
         client: &Client<C, Body>,
         base_uri: &Url,
+        timeout: Duration,
         current_data: &ApicAuthenticatorData,
     ) -> Result<ApicAuthenticatorData, ApicCommError>
             where C: 'static + Clone + hyper::client::connect::Connect + Send + Sync {
@@ -211,6 +216,7 @@ impl ApicAuthenticator for ApicUsernamePasswordAuth {
             "POST",
             &HashMap::new(),
             Some(req_body),
+            timeout,
         ).await;
         let response_json = match response_json_res {
             Ok(r) => r,

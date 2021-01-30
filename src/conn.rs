@@ -30,6 +30,7 @@ pub async fn perform_json_request<C>(
     method: &str,
     headers: &HashMap<String, String>,
     body: Option<JsonValue>,
+    timeout: Duration,
 ) -> Result<JsonValue, ApicCommError>
         where C: 'static + Clone + hyper::client::connect::Connect + Send + Sync {
     debug!("{} {}", method, uri);
@@ -52,9 +53,16 @@ pub async fn perform_json_request<C>(
     let req = req_res
         .map_err(|e| ApicCommError::ErrorAssemblingRequest(e))?;
 
-    let response = client.request(req)
-        .await
-        .map_err(|e| ApicCommError::ErrorObtainingResponse(e))?;
+    let response_or_timeout = tokio::time::timeout(
+        timeout,
+        client.request(req),
+    );
+    let response = match response_or_timeout.await {
+        Ok(Ok(resp)) => resp,
+        Ok(Err(e)) => return Err(ApicCommError::ErrorObtainingResponse(e)),
+        Err(_timeout) => return Err(ApicCommError::Timeout),
+    };
+
     if response.status() != StatusCode::OK {
         return Err(ApicCommError::ErrorResponse(response).into());
     }
@@ -388,12 +396,14 @@ pub struct ApicConnection<A: ApicAuthenticator> {
     authenticator: A,
     auth_data: ApicAuthenticatorData,
     last_login: RwLock<Instant>,
+    timeout: Duration,
 }
 impl<A: ApicAuthenticator> ApicConnection<A> {
     /// Creates a new APIC connection object.
     pub async fn new(
         base_uri: Url,
         authenticator: A,
+        timeout: Duration,
     ) -> Result<Self, ApicCommError> {
         let https = HttpsConnector::new();
         let client = Client::builder()
@@ -404,6 +414,7 @@ impl<A: ApicAuthenticator> ApicConnection<A> {
             authenticator,
             auth_data: Default::default(),
             last_login: RwLock::new(Instant::now()),
+            timeout: timeout,
         };
         me.login().await?;
         assert_ne!(me.auth_data, Default::default());
@@ -445,7 +456,7 @@ impl<A: ApicAuthenticator> ApicConnection<A> {
             .expect("locking failed");
 
         let auth_data = self.authenticator
-            .login(&self.client, &self.base_uri)
+            .login(&self.client, &self.base_uri, self.timeout)
             .await?;
         self.auth_data = auth_data;
         *last_login = Instant::now();
@@ -460,7 +471,7 @@ impl<A: ApicAuthenticator> ApicConnection<A> {
             .expect("locking failed");
 
         let auth_data = self.authenticator
-            .refresh(&self.client, &self.base_uri, &self.auth_data)
+            .refresh(&self.client, &self.base_uri, self.timeout, &self.auth_data)
             .await?;
         self.auth_data = auth_data;
         *last_login = Instant::now();
@@ -500,6 +511,7 @@ impl<A: ApicAuthenticator> ApicConnection<A> {
             "GET",
             &headers,
             None,
+            self.timeout,
         ).await?;
         let aci_objects = json_to_aci_objects(json_value)
             .map_err(|aoe| ApicCommError::InvalidAciObject(aoe))?;
@@ -539,6 +551,7 @@ impl<A: ApicAuthenticator> ApicConnection<A> {
             "GET",
             &headers,
             None,
+            self.timeout,
         ).await?;
         let aci_objects = json_to_aci_objects(json_value)
             .map_err(|aoe| ApicCommError::InvalidAciObject(aoe))?;
@@ -569,6 +582,7 @@ impl<A: ApicAuthenticator> ApicConnection<A> {
             "POST",
             &headers,
             Some(obj.to_json()),
+            self.timeout,
         ).await?;
         let aci_objects = json_to_aci_objects(json_value)
             .map_err(|aoe| ApicCommError::InvalidAciObject(aoe))?;
@@ -599,6 +613,7 @@ impl<A: ApicAuthenticator> ApicConnection<A> {
             "DELETE",
             &headers,
             None,
+            self.timeout,
         ).await?;
         Ok(())
     }

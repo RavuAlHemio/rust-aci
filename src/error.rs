@@ -34,6 +34,9 @@ pub enum ApicCommError {
 
     /// An invalid ACI object has been returned.
     InvalidAciObject(AciObjectError),
+
+    /// The operation took too long to complete.
+    Timeout,
 }
 impl fmt::Display for ApicCommError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -56,6 +59,8 @@ impl fmt::Display for ApicCommError {
                 => write!(f, "server returned response that was not valid JSON: {}", e),
             ApicCommError::InvalidAciObject(e)
                 => write!(f, "server returned an invalid ACI object: {}", e),
+            ApicCommError::Timeout
+                => write!(f, "request timed out"),
         }
     }
 }
