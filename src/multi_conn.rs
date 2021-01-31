@@ -1,6 +1,7 @@
 use std::sync::RwLock;
 use std::time::Duration;
 
+use log::{info, warn};
 use url::Url;
 
 use crate::AciObject;
@@ -79,6 +80,9 @@ macro_rules! round_robin_func {
 
                     if remedy == RoundRobinRemedy::Increment {
                         loop {
+                            let cur_uri = &self.apic_uris[write_holder.index];
+                            warn!("APIC {} is unresponsive", cur_uri);
+
                             // we have to try the next one
                             write_holder.index = (write_holder.index + 1) % self.apic_uris.len();
                             if write_holder.index == start_index.expect("start index has a value") {
@@ -86,8 +90,11 @@ macro_rules! round_robin_func {
                                 return Err(ApicCommError::Timeout);
                             }
 
+                            let new_uri = &self.apic_uris[write_holder.index];
+                            info!("switching to APIC {}", new_uri);
+
                             let new_conn_res = ApicConnection::new(
-                                self.apic_uris[write_holder.index].clone(),
+                                new_uri.clone(),
                                 self.authenticator.clone(),
                                 self.timeout,
                             ).await;
@@ -135,6 +142,7 @@ impl<A: ApicAuthenticator + Clone> ApicMultiConnection<A> {
     ) -> Result<ApicMultiConnection<A>, ApicCommError> {
         let mut err = ApicCommError::NoApicSpecified;
         for i in 0..apic_uris.len() {
+            info!("initial attempt to use APIC {}", &apic_uris[i]);
             let conn_res = ApicConnection::new(
                 apic_uris[i].clone(),
                 authenticator.clone(),
