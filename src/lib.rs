@@ -1,6 +1,7 @@
 pub mod auth;
 pub mod conn;
 pub mod error;
+pub mod multi_conn;
 pub mod path;
 
 use std::collections::HashMap;

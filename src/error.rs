@@ -37,6 +37,9 @@ pub enum ApicCommError {
 
     /// The operation took too long to complete.
     Timeout,
+
+    /// No APIC has been specified.
+    NoApicSpecified,
 }
 impl fmt::Display for ApicCommError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -61,6 +64,8 @@ impl fmt::Display for ApicCommError {
                 => write!(f, "server returned an invalid ACI object: {}", e),
             ApicCommError::Timeout
                 => write!(f, "request timed out"),
+            ApicCommError::NoApicSpecified
+                => write!(f, "no APIC specified"),
         }
     }
 }
