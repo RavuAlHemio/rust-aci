@@ -10,6 +10,9 @@ use std::fmt;
 
 use json::{self, JsonValue};
 
+/// The format of timestamps returned by the APIC API.
+pub const ACI_TIMESTAMP_FORMAT: &str = "%Y-%m-%dT%H:%M:%S%.3f%:z";
+
 const DN_KEY: &str = "dn";
 
 /// Represents an error encountered when constructing an ACI object.
