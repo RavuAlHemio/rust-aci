@@ -1,7 +1,7 @@
-use std::sync::RwLock;
 use std::time::Duration;
 
 use log::{info, warn};
+use tokio::sync::RwLock;
 use url::Url;
 
 use crate::AciObject;
@@ -37,12 +37,12 @@ macro_rules! round_robin_func {
                 // with the read lock
                 let mut remedy = {
                     let read_holder = self.cur_holder.read()
-                        .expect("lock failed (pre-check)");
+                        .await;
                     if start_index.is_none() {
                         start_index = Some(read_holder.index);
                     }
 
-                    if read_holder.conn.should_refresh_login() {
+                    if read_holder.conn.should_refresh_login().await {
                         RoundRobinRemedy::Refresh
                     } else {
                         // try performing the operation
@@ -60,7 +60,7 @@ macro_rules! round_robin_func {
                 // grab the write lock
                 {
                     let mut write_holder = self.cur_holder.write()
-                        .expect("lock failed (refresh or increment)");
+                        .await;
                     if remedy == RoundRobinRemedy::Refresh {
                         match write_holder.conn.refresh().await {
                             Ok(()) => {

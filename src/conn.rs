@@ -1,5 +1,4 @@
 use std::collections::{HashMap, HashSet};
-use std::sync::RwLock;
 use std::time::{Duration, Instant};
 
 use bitflags::bitflags;
@@ -8,6 +7,7 @@ use hyper::client::HttpConnector;
 use hyper_tls::HttpsConnector;
 use json::JsonValue;
 use log::debug;
+use tokio::sync::RwLock;
 use url::Url;
 
 use crate::{AciObject, AciObjectError};
@@ -423,16 +423,15 @@ impl<A: ApicAuthenticator> ApicConnection<A> {
     }
 
     /// Returns the instant at which the last authentication was performed.
-    pub fn last_login(&self) -> Instant {
+    pub async fn last_login(&self) -> Instant {
         *self.last_login.read()
-            .expect("locking failed")
+            .await
     }
 
     /// Returns whether the current authentication state would benefit from refreshing.
-    pub fn should_refresh_login(&self) -> bool {
-        let last_login = self.last_login.read()
-            .expect("locking failed");
-        let time_since_login = match Instant::now().checked_duration_since(*last_login) {
+    pub async fn should_refresh_login(&self) -> bool {
+        let last_login = self.last_login().await;
+        let time_since_login = match Instant::now().checked_duration_since(last_login) {
             None => {
                 // last login is in the future (?!); assume we are fine
                 return false;
@@ -454,7 +453,7 @@ impl<A: ApicAuthenticator> ApicConnection<A> {
     pub async fn login(&mut self) -> Result<(), ApicCommError> {
         // lock the last login info while the login is being performed
         let mut last_login = self.last_login.write()
-            .expect("locking failed");
+            .await;
 
         let auth_data = self.authenticator
             .login(&self.client, &self.base_uri, self.timeout)
@@ -469,7 +468,7 @@ impl<A: ApicAuthenticator> ApicConnection<A> {
     pub async fn refresh(&mut self) -> Result<(), ApicCommError> {
         assert_ne!(self.auth_data, Default::default());
         let mut last_login = self.last_login.write()
-            .expect("locking failed");
+            .await;
 
         let auth_data = self.authenticator
             .refresh(&self.client, &self.base_uri, self.timeout, &self.auth_data)
