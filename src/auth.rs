@@ -201,6 +201,7 @@ impl ApicAuthenticator for ApicUsernamePasswordAuth {
         let uri = base_uri.join("api/aaaRefresh.json")
             .map_err(|e| ApicCommError::InvalidUri(e))?;
 
+        let auth_data_headers = current_data.as_headers();
         let req_body = json::object! {
             aaaUser: {
                 attributes: {
@@ -214,7 +215,7 @@ impl ApicAuthenticator for ApicUsernamePasswordAuth {
             client,
             uri,
             "POST",
-            &HashMap::new(),
+            &auth_data_headers,
             Some(req_body),
             timeout,
         ).await;
