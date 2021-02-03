@@ -27,9 +27,9 @@ impl fmt::Display for SplitDnError {
 impl Error for SplitDnError {
 }
 
-/// Splits a Distinguished Name (DN) into its component Relative Distinguished Names (RDNs). ACI
-/// DNs consist of RDNs joined by forward slash characters, which can be escaped by placing them
-/// into square brackets. Square brackets can be nested.
+/// Splits a Distinguished Name (DN) into its component Relative Names (RNs). ACI DNs consist of
+/// RNs joined by forward slash characters, which can be escaped by wrapping them into square
+/// brackets. Square brackets can be nested.
 pub fn split_dn(dn: &str) -> Result<Vec<&str>, SplitDnError> {
     let mut start_index = 0usize;
     let mut bracket_depth = 0usize;
@@ -62,6 +62,18 @@ pub fn split_dn(dn: &str) -> Result<Vec<&str>, SplitDnError> {
     }
 }
 
+/// Obtains the Relative Name (RN) of an object from its Distinguished Name (DN) by splitting the
+/// path into RNs and taking the last one.
+pub fn dn_to_rn(dn: &str) -> Option<&str> {
+    if let Ok(pieces) = split_dn(dn) {
+        if let Some(piece) = pieces.last() {
+            return Some(*piece);
+        }
+    }
+    None
+}
+
+
 #[cfg(test)]
 mod test {
     use super::*;
@@ -73,6 +85,7 @@ mod test {
         assert_eq!(slices[0], "uni");
         assert_eq!(slices[1], "fabric");
         assert_eq!(slices[2], "leportp-MyLPSelectorProf");
+        assert_eq!(dn_to_rn(slices[2]), Some("leportp-MyLPSelectorProf"));
     }
 
     #[test]
@@ -83,6 +96,7 @@ mod test {
         assert_eq!(slices[1], "uni");
         assert_eq!(slices[2], "fabric");
         assert_eq!(slices[3], "leportp-MyLPSelectorProf");
+        assert_eq!(dn_to_rn(slices[3]), Some("leportp-MyLPSelectorProf"));
     }
 
     #[test]
@@ -93,6 +107,7 @@ mod test {
         assert_eq!(slices[1], "fabric");
         assert_eq!(slices[2], "");
         assert_eq!(slices[3], "leportp-MyLPSelectorProf");
+        assert_eq!(dn_to_rn(slices[3]), Some("leportp-MyLPSelectorProf"));
     }
 
     #[test]
@@ -103,6 +118,7 @@ mod test {
         assert_eq!(slices[1], "fabric");
         assert_eq!(slices[2], "leportp-MyLPSelectorProf");
         assert_eq!(slices[3], "");
+        assert_eq!(dn_to_rn(slices[3]), Some(""));
     }
 
     #[test]
@@ -114,6 +130,7 @@ mod test {
         assert_eq!(slices[2], "uni");
         assert_eq!(slices[3], "fabric");
         assert_eq!(slices[4], "leportp-MyLPSelectorProf");
+        assert_eq!(dn_to_rn(slices[4]), Some("leportp-MyLPSelectorProf"));
     }
 
     #[test]
@@ -125,6 +142,7 @@ mod test {
         assert_eq!(slices[2], "");
         assert_eq!(slices[3], "");
         assert_eq!(slices[4], "leportp-MyLPSelectorProf");
+        assert_eq!(dn_to_rn(slices[4]), Some("leportp-MyLPSelectorProf"));
     }
 
     #[test]
@@ -136,6 +154,7 @@ mod test {
         assert_eq!(slices[2], "leportp-MyLPSelectorProf");
         assert_eq!(slices[3], "");
         assert_eq!(slices[4], "");
+        assert_eq!(dn_to_rn(slices[4]), Some(""));
     }
 
     #[test]
@@ -150,6 +169,7 @@ mod test {
         assert_eq!(slices[3], "node-1001");
         assert_eq!(slices[4], "rsnodeGroup-[uni/fabric/maintgrp-MAINT_GRP_SAMPLE]");
         assert_eq!(slices[5], "fault-F1300");
+        assert_eq!(dn_to_rn(slices[5]), Some("fault-F1300"));
     }
 
     #[test]
@@ -166,6 +186,7 @@ mod test {
         assert_eq!(slices[5], "node-1001");
         assert_eq!(slices[6], "rsnodeGroup-[/uni/fabric/maintgrp-MAINT_GRP_SAMPLE]");
         assert_eq!(slices[7], "fault-F1300");
+        assert_eq!(dn_to_rn(slices[7]), Some("fault-F1300"));
     }
 
     #[test]
@@ -181,6 +202,7 @@ mod test {
         assert_eq!(slices[4], "rsnodeGroup-[uni/fabric/maintgrp-MAINT_GRP_SAMPLE]");
         assert_eq!(slices[5], "");
         assert_eq!(slices[6], "fault-F1300");
+        assert_eq!(dn_to_rn(slices[6]), Some("fault-F1300"));
     }
 
     #[test]
@@ -197,6 +219,7 @@ mod test {
         assert_eq!(slices[5], "fault-F1300");
         assert_eq!(slices[6], "");
         assert_eq!(slices[7], "");
+        assert_eq!(dn_to_rn(slices[7]), Some(""));
     }
 
     #[test]
@@ -221,6 +244,7 @@ mod test {
         assert_eq!(slices[8], "rstoFvPrimaryEncapDef-[uni/epp/fv-[uni/tn-TENANT/ap-DESKTOP/epg-DESK020]/node-106/dyatt-[topology/pod-1/paths-106/pathep-[eth1/11]]/conndef/conn-[vlan-1611]-[0.0.0.0]/primencap-[vlan-1612]]");
         assert_eq!(slices[9], "byDom-[uni/vmmp-VMware/dom-SWAGDVS]");
         assert_eq!(slices[10], "byHv-[comp/prov-VMware/ctrlr-[SWAGDVS]-SWAGDVS/hv-host-83]");
+        assert_eq!(dn_to_rn(slices[10]), Some("byHv-[comp/prov-VMware/ctrlr-[SWAGDVS]-SWAGDVS/hv-host-83]"));
     }
 
     #[test]

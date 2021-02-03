@@ -90,7 +90,7 @@ pub fn json_to_aci_objects(body: JsonValue) -> Result<Vec<AciObject>, AciObjectE
         return Err(AciObjectError::NoImdata);
     }
     for entry in imdata.members() {
-        let aci_obj = AciObject::from_json(entry)?;
+        let aci_obj = AciObject::from_json(entry, None)?;
         ret.push(aci_obj);
     }
 
