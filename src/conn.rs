@@ -157,7 +157,7 @@ impl RestQueryParam for ResponseSubtree {
     /// Returns the value to pass as a GET argument to the REST API.
     fn rest_value(&self) -> String {
         match &self {
-            ResponseSubtree::ReturnSelf => "self",
+            ResponseSubtree::ReturnSelf => "no",
             ResponseSubtree::ReturnChildren => "children",
             ResponseSubtree::ReturnFull => "full",
         }.into()
