@@ -40,6 +40,9 @@ pub enum ApicCommError {
 
     /// No APIC has been specified.
     NoApicSpecified,
+
+    /// The object passed to the function is missing its "dn" (Distinguished Name) attribute.
+    MissingDistinguishedName,
 }
 impl fmt::Display for ApicCommError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -66,6 +69,8 @@ impl fmt::Display for ApicCommError {
                 => write!(f, "request timed out"),
             ApicCommError::NoApicSpecified
                 => write!(f, "no APIC specified"),
+            ApicCommError::MissingDistinguishedName
+                => write!(f, "object is missing its Distinguished Name attribute ({:?})", crate::DN_KEY),
         }
     }
 }

@@ -21,9 +21,6 @@ const RN_KEY: &str = "rn";
 /// Represents an error encountered when constructing an ACI object.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub enum AciObjectError {
-    /// The "dn" attribute, storing the distinguished name, is missing from the attribute HashMap.
-    MissingDistinguishedName,
-
     /// The returned JSON lacks the `imdata` element at the top level.
     NoImdata,
 
@@ -35,15 +32,10 @@ pub enum AciObjectError {
 
     /// The JSON object representing the ACI object is missing its `attributes` value.
     JsonMissingAttributes,
-
-    /// The "rn" attribute, storing the relative name, is missing from the attribute HashMap.
-    MissingRelativeName,
 }
 impl fmt::Display for AciObjectError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match &self {
-            AciObjectError::MissingDistinguishedName
-                => write!(f, "missing distinguished name attribute ({:?})", DN_KEY),
             AciObjectError::NoImdata
                 => write!(f, "missing top-level \"imdata\" element"),
             AciObjectError::JsonNotObject
@@ -52,8 +44,6 @@ impl fmt::Display for AciObjectError {
                 => write!(f, "JSON object has multiple entries"),
             AciObjectError::JsonMissingAttributes
                 => write!(f, "JSON object is missing the attributes object"),
-            AciObjectError::MissingRelativeName
-                => write!(f, "missing relative name attribute ({:?})", RN_KEY),
         }
     }
 }
@@ -68,33 +58,17 @@ pub struct AciObject {
     children: Vec<AciObject>,
 }
 impl AciObject {
-    /// Creates a new AciObject without verifying whether the attributes HashMap contains an entry
-    /// for the Distinguished Name.
-    fn new_unchecked(
-        class_name: String,
-        attributes: HashMap<String, String>,
-        children: Vec<AciObject>,
-    ) -> AciObject {
-        AciObject {
-            class_name,
-            attributes,
-            children,
-        }
-    }
-
-    /// Attempts to create and return a new AciObject.
+    /// Creates a new AciObject with the given class name, attributes and children.
     pub fn new(
         class_name: String,
         attributes: HashMap<String, String>,
         children: Vec<AciObject>,
     ) -> Result<AciObject, AciObjectError> {
-        if !attributes.contains_key(DN_KEY) {
-            Err(AciObjectError::MissingDistinguishedName)
-        } else if !attributes.contains_key(RN_KEY) {
-            Err(AciObjectError::MissingRelativeName)
-        } else {
-            Ok(AciObject::new_unchecked(class_name, attributes, children))
-        }
+        Ok(AciObject {
+            class_name,
+            attributes,
+            children,
+        })
     }
 
     /// Returns the name of the ACI class of which this AciObject is an instance.
@@ -107,16 +81,16 @@ impl AciObject {
         self.class_name = class_name.as_ref().into()
     }
 
-    /// Returns the Distinguished Name of this AciObject.
-    pub fn dn(&self) -> &str {
+    /// Returns the Distinguished Name of this AciObject, if it is set.
+    pub fn dn(&self) -> Option<&str> {
         self.attributes.get(DN_KEY)
-            .expect("missing Distinguished Name attribute")
+            .map(|s| s.as_str())
     }
 
-    /// Returns the Relative Name of this AciObject.
-    pub fn rn(&self) -> &str {
+    /// Returns the Relative Name of this AciObject, if it is set.
+    pub fn rn(&self) -> Option<&str> {
         self.attributes.get(RN_KEY)
-            .expect("missing Relative Name attribute")
+            .map(|s| s.as_str())
     }
 
     /// Returns a reference to the HashMap of attributes of this AciObject.
@@ -163,7 +137,7 @@ impl AciObject {
     ///
     /// `parent_dn` is used to construct the Distinguished Name (DN) from the Relative Name (RN) if
     /// the DN is missing. If the DN is specified as an attribute of the object, the value of
-    /// `parent_dn` is ignored. The function ensures that the final object has both DN and RN set.
+    /// `parent_dn` is ignored.
     pub fn from_json(value: &JsonValue, parent_dn: Option<&str>) -> Result<AciObject, AciObjectError> {
         if !value.is_object() {
             return Err(AciObjectError::JsonNotObject);
@@ -197,37 +171,26 @@ impl AciObject {
 
             // ensure we have both "dn" and "rn" attributes
             if dn.is_none() {
-                // try constructing DN out of parent DN and RN
-                if parent_dn.is_none() {
-                    return Err(AciObjectError::MissingDistinguishedName);
+                if let Some(pdn) = parent_dn {
+                    // try constructing DN out of parent DN and RN
+                    if let Some(rn) = attribs.get(RN_KEY) {
+                        let dn_string = format!("{}/{}", pdn, rn);
+                        dn = Some(dn_string.clone());
+                        attribs.insert(String::from(DN_KEY), dn_string);
+                    }
                 }
-
-                let rn = match attribs.get(RN_KEY) {
-                    Some(r) => r,
-                    None => return Err(AciObjectError::MissingDistinguishedName),
-                };
-
-                let dn_string = format!("{}/{}", parent_dn.unwrap(), rn);
-                dn = Some(dn_string.clone());
-                attribs.insert(String::from(DN_KEY), dn_string);
             };
             if rn.is_none() {
-                // try constructing RN out of DN
-                let dn = match attribs.get(DN_KEY) {
-                    Some(r) => r,
-                    None => return Err(AciObjectError::MissingRelativeName),
-                };
-
-                let dn_bits = match split_dn(dn) {
-                    Ok(dnb) => dnb,
-                    Err(_) => return Err(AciObjectError::MissingRelativeName),
-                };
-                let rn_string = match dn_bits.last() {
-                    Some(rn) => String::from(*rn),
-                    None => return Err(AciObjectError::MissingRelativeName),
-                };
-                //rn = Some(rn_string.clone());
-                attribs.insert(String::from(RN_KEY), rn_string);
+                if let Some(dn) = attribs.get(DN_KEY) {
+                    // try constructing RN out of DN
+                    if let Ok(dn_bits) = split_dn(dn) {
+                        if let Some(dn_last) = dn_bits.last() {
+                            let rn_string = String::from(*dn_last);
+                            //rn = Some(rn_string.clone());
+                            attribs.insert(String::from(RN_KEY), rn_string);
+                        }
+                    }
+                }
             }
 
             let mut children = Vec::new();

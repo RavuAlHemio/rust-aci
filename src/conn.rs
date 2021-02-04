@@ -565,12 +565,17 @@ impl<A: ApicAuthenticator> ApicConnection<A> {
     ) -> Result<Vec<AciObject>, ApicCommError> {
         let mut query_uri = self.base_uri.clone();
 
+        let obj_dn = match obj.dn() {
+            Some(dn) => dn,
+            None => return Err(ApicCommError::MissingDistinguishedName),
+        };
+
         {
             let mut segs = query_uri.path_segments_mut()
                 .expect("base URI does not have editable path segments");
             segs.push("api");
             segs.push("mo");
-            segs.push(&format!("{}.json", obj.dn()));
+            segs.push(&format!("{}.json", obj_dn));
         }
 
         let mut headers = self.auth_data.as_headers();
