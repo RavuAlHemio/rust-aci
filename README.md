@@ -4,7 +4,23 @@ Rust client library for the APIC REST API of Cisco ACI
 
 ## Usage example
 
+Cargo.toml:
+
+```toml
+[dependencies]
+aci = { version = "0.1" }
+tokio = { version = "1.1", features = ["full"] }
+url = { version = "2.2" }
+```
+
+src/main.rs:
+
 ```rust
+use aci::auth::ApicUsernamePasswordAuth;
+use aci::conn::{ApicConnection, QuerySettings};
+use url::Url;
+
+
 async fn do_query() -> Result<(), Box<dyn std::error::Error>> {
     let apic_auth = ApicUsernamePasswordAuth::new(
         "username".into(),
