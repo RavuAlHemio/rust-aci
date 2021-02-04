@@ -8,8 +8,7 @@ use json;
 use log::debug;
 use url::Url;
 
-use crate::conn;
-use crate::error::ApicCommError;
+use crate::conn::{self, ApicCommError};
 
 
 /// Data returned from the APIC authenticator to the APIC connection.

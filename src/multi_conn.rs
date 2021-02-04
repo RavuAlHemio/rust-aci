@@ -6,8 +6,7 @@ use url::Url;
 
 use crate::AciObject;
 use crate::auth::ApicAuthenticator;
-use crate::conn::{ApicConnection, QuerySettings};
-use crate::error::ApicCommError;
+use crate::conn::{ApicCommError, ApicConnection, QuerySettings};
 
 
 #[derive(Debug)]
