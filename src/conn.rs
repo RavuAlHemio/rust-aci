@@ -65,18 +65,18 @@ pub async fn perform_json_request<C>(
         Err(_timeout) => return Err(ApicCommError::Timeout),
     };
 
-    if response.status() != StatusCode::OK {
-        return Err(ApicCommError::ErrorResponse(response).into());
-    }
-
-    let (_response_parts, response_body) = response.into_parts();
+    let (response_parts, response_body) = response.into_parts();
     let response_bytes = hyper::body::to_bytes(response_body)
         .await
         .map_err(|e| ApicCommError::ErrorObtainingResponse(e))?;
     let response_str = std::str::from_utf8(&response_bytes)
-        .map_err(|e| ApicCommError::InvalidUtf8(e))?;
+        .map_err(|e| ApicCommError::InvalidUtf8(e, response_bytes.clone()))?;
     let response_json = json::parse(response_str)
-        .map_err(|e| ApicCommError::InvalidJson(e))?;
+        .map_err(|e| ApicCommError::InvalidJson(e, String::from(response_str)))?;
+
+    if response_parts.status != StatusCode::OK {
+        return Err(ApicCommError::ErrorResponse(response_json, response_parts).into());
+    }
 
     Ok(response_json)
 }
@@ -515,8 +515,8 @@ impl<A: ApicAuthenticator> ApicConnection<A> {
             None,
             self.timeout,
         ).await?;
-        let aci_objects = json_to_aci_objects(json_value)
-            .map_err(|aoe| ApicCommError::InvalidAciObject(aoe))?;
+        let aci_objects = json_to_aci_objects(json_value.clone())
+            .map_err(|aoe| ApicCommError::InvalidAciObject(aoe, json_value))?;
         Ok(aci_objects)
     }
 
@@ -555,8 +555,8 @@ impl<A: ApicAuthenticator> ApicConnection<A> {
             None,
             self.timeout,
         ).await?;
-        let aci_objects = json_to_aci_objects(json_value)
-            .map_err(|aoe| ApicCommError::InvalidAciObject(aoe))?;
+        let aci_objects = json_to_aci_objects(json_value.clone())
+            .map_err(|aoe| ApicCommError::InvalidAciObject(aoe, json_value))?;
         Ok(aci_objects)
     }
 
@@ -591,8 +591,8 @@ impl<A: ApicAuthenticator> ApicConnection<A> {
             Some(obj.to_json()),
             self.timeout,
         ).await?;
-        let aci_objects = json_to_aci_objects(json_value)
-            .map_err(|aoe| ApicCommError::InvalidAciObject(aoe))?;
+        let aci_objects = json_to_aci_objects(json_value.clone())
+            .map_err(|aoe| ApicCommError::InvalidAciObject(aoe, json_value))?;
         Ok(aci_objects)
     }
 
@@ -646,16 +646,16 @@ pub enum ApicCommError {
     ErrorObtainingResponse(hyper::Error),
 
     /// An error response has been returned by the APIC.
-    ErrorResponse(hyper::Response<hyper::Body>),
+    ErrorResponse(JsonValue, hyper::http::response::Parts),
 
     /// The APIC response is not valid UTF-8.
-    InvalidUtf8(Utf8Error),
+    InvalidUtf8(Utf8Error, hyper::body::Bytes),
 
     /// The APIC response is not valid JSON.
-    InvalidJson(json::Error),
+    InvalidJson(json::Error, String),
 
     /// An invalid ACI object has been returned.
-    InvalidAciObject(AciObjectError),
+    InvalidAciObject(AciObjectError, JsonValue),
 
     /// The operation took too long to complete.
     Timeout,
@@ -679,13 +679,13 @@ impl fmt::Display for ApicCommError {
                 => write!(f, "error assembling request: {}", e),
             ApicCommError::ErrorObtainingResponse(e)
                 => write!(f, "error obtaining response: {}", e),
-            ApicCommError::ErrorResponse(_e)
-                => write!(f, "server returned negative response"),
-            ApicCommError::InvalidUtf8(e)
+            ApicCommError::ErrorResponse(j, p)
+                => write!(f, "server returned negative response {}: {}", p.status, j),
+            ApicCommError::InvalidUtf8(e, _)
                 => write!(f, "server returned response that was not valid UTF-8: {}", e),
-            ApicCommError::InvalidJson(e)
+            ApicCommError::InvalidJson(e, _)
                 => write!(f, "server returned response that was not valid JSON: {}", e),
-            ApicCommError::InvalidAciObject(e)
+            ApicCommError::InvalidAciObject(e, _)
                 => write!(f, "server returned an invalid ACI object: {}", e),
             ApicCommError::Timeout
                 => write!(f, "request timed out"),

@@ -152,11 +152,11 @@ impl ApicAuthenticator for ApicUsernamePasswordAuth {
         ).await;
         let response_json = match response_json_res {
             Ok(r) => r,
-            Err(ApicCommError::ErrorResponse(resp)) => {
-                if resp.status() == StatusCode::FORBIDDEN {
+            Err(ApicCommError::ErrorResponse(err_json, err_parts)) => {
+                if err_parts.status == StatusCode::FORBIDDEN {
                     return Err(ApicCommError::InvalidCredentials);
                 } else {
-                    return Err(ApicCommError::ErrorResponse(resp));
+                    return Err(ApicCommError::ErrorResponse(err_json, err_parts));
                 }
             },
             Err(e) => {
@@ -220,11 +220,11 @@ impl ApicAuthenticator for ApicUsernamePasswordAuth {
         ).await;
         let response_json = match response_json_res {
             Ok(r) => r,
-            Err(ApicCommError::ErrorResponse(resp)) => {
-                if resp.status() == StatusCode::FORBIDDEN {
+            Err(ApicCommError::ErrorResponse(err_json, err_parts)) => {
+                if err_parts.status == StatusCode::FORBIDDEN {
                     return Err(ApicCommError::InvalidCredentials);
                 } else {
-                    return Err(ApicCommError::ErrorResponse(resp));
+                    return Err(ApicCommError::ErrorResponse(err_json, err_parts));
                 }
             },
             Err(e) => {
